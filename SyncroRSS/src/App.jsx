@@ -56,7 +56,7 @@ def generate_feed():
 
     fg = FeedGenerator()
     fg.id(URL)
-    fg.title('Syncrophone - Flux Personnalisé')
+    fg.title('Syncrophone - News')
     fg.link(href=URL, rel='alternate')
     fg.description('Flux RSS généré via Python Script')
     fg.language('fr')
