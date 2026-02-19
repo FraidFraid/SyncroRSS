@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, Github, Rss, Copy, Check, Settings, Info, Search, Code, Image as ImageIcon, Type, Link as LinkIcon } from 'lucide-react';
+import { Terminal, Github, Rss, Copy, Check, Settings, Info, Search, Code, Image as ImageIcon, Type, Link as LinkIcon, RefreshCw } from 'lucide-react';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('config');
@@ -14,6 +14,11 @@ const App = () => {
   });
 
   const [pythonScript, setPythonScript] = useState('');
+  const diagnosticChecks = [
+    { path: 'syncro_rss.py', reason: 'Script Python de generation RSS a la racine.' },
+    { path: '.github/workflows/main.yml', reason: 'Workflow GitHub Actions detecte automatiquement.' },
+    { path: 'rss.xml', reason: 'Fichier genere/committe par l Action apres execution.' }
+  ];
 
   useEffect(() => {
     const script = `import requests
@@ -111,24 +116,29 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
       - name: Install dependencies
         run: pip install requests beautifulsoup4 feedgen
       - name: Generate RSS
         run: python syncro_rss.py
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: \${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./`;
+      - name: Commit and push rss.xml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rss.xml
+          git diff --cached --quiet || git commit -m "chore: update rss feed"
+          git push`;
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -155,7 +165,8 @@ jobs:
             {[
               { id: 'config', icon: Settings, label: 'Configuration' },
               { id: 'script', icon: Code, label: 'Script Python' },
-              { id: 'deploy', icon: Github, label: 'GitHub' }
+              { id: 'deploy', icon: Github, label: 'GitHub' },
+              { id: 'diagnostic', icon: RefreshCw, label: 'Diagnostic' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -272,7 +283,7 @@ jobs:
                     <pre className="text-sm font-mono text-slate-300 leading-relaxed">{pythonScript}</pre>
                   </div>
                 </>
-              ) : (
+              ) : activeTab === 'deploy' ? (
                 <div className="bg-white p-8 min-h-[500px]">
                   <h3 className="text-xl font-bold mb-4 text-slate-900 flex items-center gap-2">
                     <Github className="text-slate-900" /> Déploiement GitHub Actions
@@ -282,7 +293,7 @@ jobs:
                   <div className="space-y-6">
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                       <p className="text-sm font-bold text-slate-700 mb-2">
-                        1. Fichier : <code className="text-orange-600">.github/workflows/update.yml</code>
+                        1. Fichier : <code className="text-orange-600">.github/workflows/main.yml</code>
                       </p>
                       <div className="relative group">
                         <button
@@ -310,6 +321,27 @@ jobs:
                           Activez "GitHub Pages" dans les réglages du dépôt pour obtenir l'URL publique.
                         </p>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white p-8 min-h-[500px]">
+                  <h3 className="text-xl font-bold mb-4 text-slate-900 flex items-center gap-2">
+                    <RefreshCw className="text-slate-900" /> Mode Diagnostic
+                  </h3>
+                  <p className="text-slate-600 mb-6">Verifiez que les fichiers critiques sont bien a la racine du depot GitHub.</p>
+                  <div className="space-y-4">
+                    {diagnosticChecks.map((check) => (
+                      <div key={check.path} className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p className="text-sm font-bold text-slate-800">
+                          <code className="text-orange-600">{check.path}</code>
+                        </p>
+                        <p className="text-xs text-slate-600 mt-1">{check.reason}</p>
+                      </div>
+                    ))}
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                      Si la branche <code>gh-pages</code> n apparait pas, lancez d abord l Action <code>Update RSS Feed</code> depuis l onglet Actions, puis
+                      verifiez que le workflow passe en vert.
                     </div>
                   </div>
                 </div>
