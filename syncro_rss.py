@@ -40,6 +40,32 @@ def get_remote_size(url: str) -> int:
     return 1
 
 
+def fetch_article_description(session: requests.Session, link: str, headers: dict) -> str:
+    try:
+        res = session.get(link, headers=headers, timeout=15)
+        res.raise_for_status()
+    except Exception:
+        return ""
+
+    soup = BeautifulSoup(res.text, "html.parser")
+
+    # Main product description block on Syncrophone article pages.
+    main_desc = soup.select_one('.fa_description[itemprop="description"]')
+    if main_desc:
+        text = " ".join(main_desc.stripped_strings)
+        if text:
+            return text
+
+    # Fallback to OG description if present.
+    og_desc = soup.select_one('meta[property="og:description"]')
+    if og_desc:
+        content = (og_desc.get("content") or "").strip()
+        if content:
+            return content
+
+    return ""
+
+
 def generate_feed() -> None:
     print(f"Extraction des news depuis {URL}...")
     headers = {
@@ -70,6 +96,7 @@ def generate_feed() -> None:
     print(f"Articles detectes : {len(items)}")
 
     parsed_items = []
+    session = requests.Session()
     for item in items:
         try:
             title_tag = item.select_one(SELECTORS["title"])
@@ -84,6 +111,9 @@ def generate_feed() -> None:
 
             desc_tag = item.select_one(SELECTORS["description"])
             description = desc_tag.get_text(strip=True) if desc_tag else "Pas de description."
+            article_description = fetch_article_description(session, link, headers)
+            if article_description:
+                description = article_description
 
             img_tag = item.select_one(SELECTORS["image"])
             img_url = None
