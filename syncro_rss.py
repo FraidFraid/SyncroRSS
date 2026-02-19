@@ -13,7 +13,8 @@ SELECTORS = {
     'title': "h3.bp_designation a",
     'link': "h3.bp_designation a",
     'description': ".bp_marque a",
-    'image': ".bp_image img"
+    'image': "img_url = img_tag.get("src") or img_tag.get("data-src") or img_tag.get("data-lazy")
+"
 }
 
 def generate_feed():
