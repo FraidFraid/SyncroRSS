@@ -150,7 +150,8 @@ jobs:
         with:
           github_token: \${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./SyncroRSS/dist`;
+          publish_dir: ./SyncroRSS/dist
+          keep_files: true`;
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
