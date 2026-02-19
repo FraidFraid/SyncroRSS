@@ -124,6 +124,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -132,13 +136,21 @@ jobs:
         run: pip install requests beautifulsoup4 feedgen
       - name: Generate RSS
         run: python syncro_rss.py
-      - name: Commit and push rss.xml
+      - name: Install app dependencies
+        working-directory: SyncroRSS
+        run: npm install
+      - name: Build dashboard app
+        working-directory: SyncroRSS
+        run: npm run build
+      - name: Add RSS to app output
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add rss.xml
-          git diff --cached --quiet || git commit -m "chore: update rss feed"
-          git push`;
+          cp rss.xml SyncroRSS/dist/rss.xml
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: \${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./SyncroRSS/dist`;
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
