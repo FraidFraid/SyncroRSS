@@ -54,6 +54,30 @@ def get_remote_size(url: str) -> int:
     return 1
 
 
+def extract_release_info_line(soup: BeautifulSoup) -> str:
+    mapping = {
+        "label": "",
+        "format": "",
+        "country": "",
+        "released": "",
+        "style": "",
+    }
+
+    for label_node in soup.select(".label_carac"):
+        label = " ".join(label_node.stripped_strings).strip().lower().rstrip(":")
+        value_node = label_node.find_next_sibling(class_="label_valeur")
+        if not value_node:
+            continue
+        value = " ".join(value_node.stripped_strings).strip()
+        if not value:
+            continue
+        if label in mapping and not mapping[label]:
+            mapping[label] = value
+
+    parts = [mapping[k] for k in ["label", "format", "country", "released", "style"] if mapping[k]]
+    return " | ".join(parts)
+
+
 def fetch_article_description(session: requests.Session, link: str, headers: dict) -> str:
     try:
         res = session.get(link, headers=headers, timeout=15)
@@ -63,29 +87,28 @@ def fetch_article_description(session: requests.Session, link: str, headers: dic
 
     soup = BeautifulSoup(res.text, "html.parser")
 
+    release_info_line = extract_release_info_line(soup)
+
     # Preferred block: long release description panel.
     long_desc = soup.select_one("#div_description_longue .hide_info_annexe")
     if long_desc:
         text = " ".join(long_desc.stripped_strings)
         if text:
+            if release_info_line:
+                return f"{release_info_line}\n\n{text}"
             return text
 
     # Fallback: build a meaningful summary from "Release Information".
-    info_rows = soup.select(".label_carac + .label_valeur")
-    if info_rows:
-        parts = []
-        for row in info_rows[:6]:
-            value = " ".join(row.stripped_strings)
-            if value:
-                parts.append(value)
-        if parts:
-            return " | ".join(parts)
+    if release_info_line:
+        return release_info_line
 
     # Fallback to OG description if present.
     og_desc = soup.select_one('meta[property="og:description"]')
     if og_desc:
         content = (og_desc.get("content") or "").strip()
         if content:
+            if release_info_line:
+                return f"{release_info_line}\n\n{content}"
             return content
 
     return "No release description available."
