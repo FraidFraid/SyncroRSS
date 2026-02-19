@@ -114,6 +114,13 @@ def fetch_article_description(session: requests.Session, link: str, headers: dic
     return "No release description available."
 
 
+def split_meta_and_body(text: str) -> tuple[str, str]:
+    parts = text.split("\n\n", 1)
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip()
+    return text.strip(), ""
+
+
 def generate_feed() -> None:
     print(f"Extraction des news depuis {URL}...")
     headers = {
@@ -144,6 +151,7 @@ def generate_feed() -> None:
     print(f"Articles detectes : {len(items)}")
 
     parsed_items = []
+    seen_links = set()
     session = requests.Session()
     for item in items:
         try:
@@ -156,6 +164,9 @@ def generate_feed() -> None:
             if not link_tag or "href" not in link_tag.attrs:
                 continue
             link = to_absolute(link_tag["href"])
+            if link in seen_links:
+                continue
+            seen_links.add(link)
 
             desc_tag = item.select_one(SELECTORS["description"])
             description = desc_tag.get_text(strip=True) if desc_tag else "Pas de description."
@@ -193,8 +204,10 @@ def generate_feed() -> None:
         if entry["img_url"]:
             img_size = get_remote_size(entry["img_url"])
             fe.enclosure(entry["img_url"], img_size, "image/jpeg")
+            meta_line, body_text = split_meta_and_body(entry["description"])
+            body_html = f"<p>{body_text}</p>" if body_text else ""
             fe.content(
-                f'<p><img src="{entry["img_url"]}" alt="{entry["title"]}"/></p><p>{entry["description"]}</p>',
+                f"<p><strong>{meta_line}</strong></p>{body_html}",
                 type="html",
             )
         fe.pubDate(datetime.now().astimezone())
