@@ -9,7 +9,7 @@ BASE = "https://www.syncrophone.fr"
 
 # Vos sélecteurs CSS
 SELECTORS = {
-    'item': "jq-products-list .product_box",
+    'item': ".jq-products-list .product_box",
     'title': "h3.bp_designation a",
     'link': "h3.bp_designation a",
     'description': ".bp_marque a",
