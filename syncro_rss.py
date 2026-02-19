@@ -29,6 +29,15 @@ def article_sort_key(link: str) -> int:
     return 0
 
 
+def product_sort_key(item: BeautifulSoup, link: str) -> int:
+    bp = item.select_one(".bp_content[idProduit]")
+    if bp:
+        raw_id = bp.get("idProduit")
+        if raw_id and str(raw_id).isdigit():
+            return int(raw_id)
+    return article_sort_key(link)
+
+
 def get_remote_size(url: str) -> int:
     try:
         res = requests.head(url, allow_redirects=True, timeout=10)
@@ -50,16 +59,9 @@ def fetch_article_description(session: requests.Session, link: str, headers: dic
     soup = BeautifulSoup(res.text, "html.parser")
 
     # Preferred block: long release description panel.
-    long_desc = soup.select_one('#div_description_longue .hide_info_annexe')
+    long_desc = soup.select_one("#div_description_longue .hide_info_annexe")
     if long_desc:
         text = " ".join(long_desc.stripped_strings)
-        if text:
-            return text
-
-    # Fallback: generic product description block.
-    main_desc = soup.select_one('.fa_description[itemprop="description"]')
-    if main_desc:
-        text = " ".join(main_desc.stripped_strings)
         if text:
             return text
 
@@ -135,7 +137,7 @@ def generate_feed() -> None:
                     "link": link,
                     "description": description,
                     "img_url": img_url,
-                    "sort_key": article_sort_key(link),
+                    "sort_key": product_sort_key(item, link),
                 }
             )
         except Exception:
@@ -153,8 +155,8 @@ def generate_feed() -> None:
             img_size = get_remote_size(entry["img_url"])
             fe.enclosure(entry["img_url"], img_size, "image/jpeg")
             fe.content(
-                f'<![CDATA[<p><img src="{entry["img_url"]}" alt="{entry["title"]}"/></p><p>{entry["description"]}</p>]]>',
-                type="CDATA",
+                f'<p><img src="{entry["img_url"]}" alt="{entry["title"]}"/></p><p>{entry["description"]}</p>',
+                type="html",
             )
         fe.pubDate(datetime.now().astimezone())
 
