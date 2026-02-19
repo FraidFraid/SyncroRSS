@@ -49,7 +49,14 @@ def fetch_article_description(session: requests.Session, link: str, headers: dic
 
     soup = BeautifulSoup(res.text, "html.parser")
 
-    # Main product description block on Syncrophone article pages.
+    # Preferred block: long release description panel.
+    long_desc = soup.select_one('#div_description_longue .hide_info_annexe')
+    if long_desc:
+        text = " ".join(long_desc.stripped_strings)
+        if text:
+            return text
+
+    # Fallback: generic product description block.
     main_desc = soup.select_one('.fa_description[itemprop="description"]')
     if main_desc:
         text = " ".join(main_desc.stripped_strings)
