@@ -30,12 +30,17 @@ def article_sort_key(link: str) -> int:
 
 
 def product_sort_key(item: BeautifulSoup, link: str) -> int:
+    link_key = article_sort_key(link)
+    if link_key > 0:
+        return link_key
+
     bp = item.select_one(".bp_content[idProduit]")
     if bp:
         raw_id = bp.get("idProduit")
         if raw_id and str(raw_id).isdigit():
-            return int(raw_id)
-    return article_sort_key(link)
+            # Keep this below explicit article IDs to avoid odd ordering.
+            return int(raw_id) - 1_000_000
+    return -1_000_000_000
 
 
 def get_remote_size(url: str) -> int:
@@ -65,6 +70,17 @@ def fetch_article_description(session: requests.Session, link: str, headers: dic
         if text:
             return text
 
+    # Fallback: build a meaningful summary from "Release Information".
+    info_rows = soup.select(".label_carac + .label_valeur")
+    if info_rows:
+        parts = []
+        for row in info_rows[:6]:
+            value = " ".join(row.stripped_strings)
+            if value:
+                parts.append(value)
+        if parts:
+            return " | ".join(parts)
+
     # Fallback to OG description if present.
     og_desc = soup.select_one('meta[property="og:description"]')
     if og_desc:
@@ -72,7 +88,7 @@ def fetch_article_description(session: requests.Session, link: str, headers: dic
         if content:
             return content
 
-    return ""
+    return "No release description available."
 
 
 def generate_feed() -> None:
