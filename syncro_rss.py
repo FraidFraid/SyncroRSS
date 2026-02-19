@@ -29,6 +29,17 @@ def article_sort_key(link: str) -> int:
     return 0
 
 
+def get_remote_size(url: str) -> int:
+    try:
+        res = requests.head(url, allow_redirects=True, timeout=10)
+        size = res.headers.get("Content-Length")
+        if size and size.isdigit():
+            return int(size)
+    except Exception:
+        pass
+    return 1
+
+
 def generate_feed() -> None:
     print(f"Extraction des news depuis {URL}...")
     headers = {
@@ -102,7 +113,12 @@ def generate_feed() -> None:
         fe.link(href=entry["link"])
         fe.description(entry["description"])
         if entry["img_url"]:
-            fe.enclosure(entry["img_url"], 0, "image/jpeg")
+            img_size = get_remote_size(entry["img_url"])
+            fe.enclosure(entry["img_url"], img_size, "image/jpeg")
+            fe.content(
+                f'<![CDATA[<p><img src="{entry["img_url"]}" alt="{entry["title"]}"/></p><p>{entry["description"]}</p>]]>',
+                type="CDATA",
+            )
         fe.pubDate(datetime.now().astimezone())
 
     fg.rss_file("rss.xml")
