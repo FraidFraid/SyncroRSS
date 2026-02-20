@@ -193,7 +193,9 @@ def generate_feed():
                 print(f"❌ Erreur sur un article: {e}")
                 continue
                 
-        fg.rss_file('rss.xml')
+        rss_str = fg.rss_str(pretty=True)
+        with open('rss.xml', 'wb') as f:
+         f.write(rss_str)    
         print(f"\n✅ Fichier rss.xml généré avec succès ({len(items)} articles)")
         
     except Exception as e:
