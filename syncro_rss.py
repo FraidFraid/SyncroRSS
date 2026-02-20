@@ -1,4 +1,5 @@
 import requests
+import json
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from datetime import datetime
@@ -27,8 +28,22 @@ def generate_feed():
         res = requests.post(AJAX_URL, data=payload, headers=headers, timeout=15)
         res.raise_for_status()
         
-        # Le résultat devrait contenir le HTML des produits
-        soup = BeautifulSoup(res.text, 'html.parser')
+        # Parse le JSON retourné
+        data = json.loads(res.text)
+        
+        # La clé est ".load-page[data-id=\"60050\"][data-language=\"1\"]"
+        html_content = None
+        for key, value in data.items():
+            if 'load-page' in key:
+                html_content = value
+                break
+        
+        if not html_content:
+            print("❌ Aucune clé 'load-page' trouvée dans le JSON")
+            html_content = ""
+        
+        # Parse le HTML extrait
+        soup = BeautifulSoup(html_content, 'html.parser')
         
         fg = FeedGenerator()
         fg.id(BASE + '/news')
@@ -47,7 +62,7 @@ def generate_feed():
             fe.id(BASE + '/news#erreur')
             fe.title("⚠️ Aucun article détecté")
             fe.link(href=BASE + '/news')
-            fe.description(f"Le script AJAX a retourné {len(res.text)} caractères mais aucun div.product_box trouvé. Vérifiez les sélecteurs.")
+            fe.description(f"HTML extrait: {len(html_content)} caractères. Aucun div.product_box trouvé.")
             fe.pubDate(datetime.now().astimezone())
             
         for item in items:
