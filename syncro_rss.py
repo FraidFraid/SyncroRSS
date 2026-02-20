@@ -9,10 +9,10 @@ URL = "https://www.syncrophone.fr/news"
 BASE = "https://www.syncrophone.fr"
 
 SELECTORS = {
-    'item': ".news-item, .post-item, article",
-    'title': "h2, h3, .title, .post-title",
-    'link': "a",
-    'description': ".description, .summary, p, .post-content",
+    'item': "article.product-miniature, .product-miniature, .ajax_block_product, .item",
+    'title': ".product-title, .product-name, h2, h3",
+    'link': "a.thumbnail, a.product-thumbnail, .product-title a, a",
+    'description': ".product-price-and-shipping, .product-description, .price",
     'image': "img"
 }
 
@@ -35,6 +35,15 @@ def generate_feed():
         items = soup.select(SELECTORS['item'])
         print(f"Trouvé : {len(items)} articles")
         
+        # SÉCURITÉ : Si 0 article trouvé, on génère un faux article d'alerte pour prévenir l'utilisateur dans Feedly
+        if len(items) == 0:
+            fe = fg.add_entry()
+            fe.id(URL + "#erreur")
+            fe.title("⚠️ Aucun article détecté (Problème de sélecteurs)")
+            fe.link(href=URL)
+            fe.description("Le script Python s'est bien lancé, mais les sélecteurs CSS n'ont trouvé aucun produit sur la page. Mettez à jour les sélecteurs dans votre code.")
+            fe.pubDate(datetime.now().astimezone())
+            
         for item in items:
             try:
                 # 1. Titre
@@ -48,16 +57,10 @@ def generate_feed():
                 link = link_tag['href']
                 if not link.startswith('http'): link = BASE + (link if link.startswith('/') else '/' + link)
                 
-                # 3. Description (Améliorée pour Feedly)
+                # 3. Description
                 desc_tag = item.select_one(SELECTORS['description'])
-                if desc_tag:
-                    # Garde le formatage HTML (sauts de ligne, etc.)
-                    desc_html = desc_tag.decode_contents() 
-                    # Version texte simple pour le résumé
-                    desc_text = desc_tag.get_text(strip=True) 
-                else:
-                    desc_html = ""
-                    desc_text = ""
+                desc_html = desc_tag.decode_contents() if desc_tag else ""
+                desc_text = desc_tag.get_text(strip=True) if desc_tag else ""
                 
                 # 4. Image
                 img_tag = item.select_one(SELECTORS['image'])
@@ -71,15 +74,11 @@ def generate_feed():
                 fe.id(link)
                 fe.title(title)
                 fe.link(href=link)
-                
-                # fe.description est utilisé comme résumé court dans Feedly
                 fe.description(desc_text)
                 
-                # FORMATAGE FEEDLY: fe.content gère le corps complet de l'article
                 full_content = f"<div>"
                 if img_url:
                     fe.enclosure(img_url, 0, 'image/jpeg')
-                    # On ajoute l'image dans le corps de l'article
                     full_content += f"<img src='{img_url}' style='max-width:100%; margin-bottom:15px;' /><br/>"
                 
                 full_content += f"<div style='font-size:14px; line-height:1.6;'>{desc_html}</div></div>"
@@ -88,7 +87,6 @@ def generate_feed():
                 fe.pubDate(datetime.now().astimezone())
                 
             except Exception as e:
-                print(f"Erreur sur un article : {e}")
                 continue
 
         fg.rss_file('rss.xml')
