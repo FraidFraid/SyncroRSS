@@ -1,82 +1,64 @@
 import requests
-import json
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from datetime import datetime
 
 # --- CONFIGURATION POUR SYNCROPHONE ---
-AJAX_URL = "https://www.syncrophone.fr/ajax/load_page.php"
+URL = "https://www.syncrophone.fr/news/"
 BASE = "https://www.syncrophone.fr"
 
 def generate_feed():
-    print(f"Extraction des news via AJAX...")
+    print(f"Extraction des news depuis {URL}...")
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': 'https://www.syncrophone.fr/news'
-    }
-    
-    # Payload exacte de la requête AJAX
-    payload = {
-        'pages[0][id]': '60050',
-        'pages[0][language]': '1'
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0'
     }
     
     try:
-        res = requests.post(AJAX_URL, data=payload, headers=headers, timeout=15)
+        res = requests.get(URL, headers=headers, timeout=20, allow_redirects=True)
         res.raise_for_status()
-        
-        # Parse le JSON retourné
-        data = json.loads(res.text)
-        
-        # La clé est ".load-page[data-id=\"60050\"][data-language=\"1\"]"
-        html_content = None
-        for key, value in data.items():
-            if 'load-page' in key:
-                html_content = value
-                break
-        
-        if not html_content:
-            print("❌ Aucune clé 'load-page' trouvée dans le JSON")
-            html_content = ""
-        
-        # Parse le HTML extrait
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(res.text, 'html.parser')
         
         fg = FeedGenerator()
-        fg.id(BASE + '/news')
+        fg.id(URL)
         fg.title('Syncrophone - Flux RSS')
-        fg.link(href=BASE + '/news', rel='alternate')
+        fg.link(href=URL, rel='alternate')
         fg.description('Dernières news de Syncrophone.fr')
         fg.language('fr')
         
-        # SÉLECTEUR SPÉCIFIQUE À SYNCROPHONE
         items = soup.select('div.product_box')
         print(f"Trouvé : {len(items)} articles")
         
-        # SÉCURITÉ : Si 0 article trouvé
         if len(items) == 0:
             fe = fg.add_entry()
-            fe.id(BASE + '/news#erreur')
+            fe.id(URL + '#erreur')
             fe.title("⚠️ Aucun article détecté")
-            fe.link(href=BASE + '/news')
-            fe.description(f"HTML extrait: {len(html_content)} caractères. Aucun div.product_box trouvé.")
+            fe.link(href=URL)
+            fe.description(f"Le script a récupéré {len(res.text)} caractères mais aucun div.product_box trouvé.")
             fe.pubDate(datetime.now().astimezone())
             
         for item in items:
             try:
-                # 1. ARTISTE + TITRE
+                # 1. TITRE (essayer span.artiste + span.titre, sinon prendre le texte du lien)
                 artiste_tag = item.select_one('span.artiste')
                 titre_tag = item.select_one('span.titre')
                 
-                if not artiste_tag or not titre_tag:
-                    continue
-                
-                artiste = artiste_tag.get_text(strip=True)
-                titre = titre_tag.get_text(strip=True)
-                title = f"{artiste} - {titre}"
+                if artiste_tag and titre_tag:
+                    artiste = artiste_tag.get_text(strip=True)
+                    titre = titre_tag.get_text(strip=True)
+                    title = f"{artiste} - {titre}"
+                else:
+                    # Fallback : prendre le texte complet du lien
+                    link_tag = item.select_one('h3.bp_designation a')
+                    if not link_tag:
+                        continue
+                    title = link_tag.get_text(strip=True)
                 
                 # 2. LIEN
                 link_tag = item.select_one('h3.bp_designation a')
@@ -126,7 +108,7 @@ def generate_feed():
                 fe.link(href=link)
                 fe.description(description)
                 
-                # Contenu enrichi pour Feedly (avec content:encoded)
+                # Contenu enrichi pour Feedly
                 full_content = "<div>"
                 
                 if img_url:
