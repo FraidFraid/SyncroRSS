@@ -2,27 +2,38 @@ import requests
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from datetime import datetime
-import os
 
 # --- CONFIGURATION POUR SYNCROPHONE ---
-URL = "https://www.syncrophone.fr/news"
+AJAX_URL = "https://www.syncrophone.fr/ajax/load_page.php"
 BASE = "https://www.syncrophone.fr"
 
 def generate_feed():
-    print(f"Extraction des news depuis {URL}...")
+    print(f"Extraction des news via AJAX...")
+    
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://www.syncrophone.fr/news'
+    }
+    
+    # Payload exacte de la requête AJAX
+    payload = {
+        'pages[0][id]': '60050',
+        'pages[0][language]': '1'
     }
     
     try:
-        res = requests.get(URL, headers=headers, timeout=15)
+        res = requests.post(AJAX_URL, data=payload, headers=headers, timeout=15)
         res.raise_for_status()
+        
+        # Le résultat devrait contenir le HTML des produits
         soup = BeautifulSoup(res.text, 'html.parser')
         
         fg = FeedGenerator()
-        fg.id(URL)
+        fg.id(BASE + '/news')
         fg.title('Syncrophone - Flux RSS')
-        fg.link(href=URL, rel='alternate')
+        fg.link(href=BASE + '/news', rel='alternate')
         fg.description('Dernières news de Syncrophone.fr')
         fg.language('fr')
         
@@ -30,18 +41,18 @@ def generate_feed():
         items = soup.select('div.product_box')
         print(f"Trouvé : {len(items)} articles")
         
-        # SÉCURITÉ : Si 0 article trouvé, on génère un faux article d'alerte
+        # SÉCURITÉ : Si 0 article trouvé
         if len(items) == 0:
             fe = fg.add_entry()
-            fe.id(URL + "#erreur")
-            fe.title("⚠️ Aucun article détecté (Problème de sélecteurs)")
-            fe.link(href=URL)
-            fe.description("Le script Python s'est bien lancé, mais les sélecteurs CSS n'ont trouvé aucun produit sur la page. Mettez à jour les sélecteurs dans votre code.")
+            fe.id(BASE + '/news#erreur')
+            fe.title("⚠️ Aucun article détecté")
+            fe.link(href=BASE + '/news')
+            fe.description(f"Le script AJAX a retourné {len(res.text)} caractères mais aucun div.product_box trouvé. Vérifiez les sélecteurs.")
             fe.pubDate(datetime.now().astimezone())
             
         for item in items:
             try:
-                # 1. ARTISTE + TITRE (dans h3.bp_designation)
+                # 1. ARTISTE + TITRE
                 artiste_tag = item.select_one('span.artiste')
                 titre_tag = item.select_one('span.titre')
                 
@@ -52,16 +63,16 @@ def generate_feed():
                 titre = titre_tag.get_text(strip=True)
                 title = f"{artiste} - {titre}"
                 
-                # 2. LIEN (dans h3 > a)
+                # 2. LIEN
                 link_tag = item.select_one('h3.bp_designation a')
                 if not link_tag:
                     continue
                     
-                link = link_tag['href']
+                link = link_tag.get('href', '')
                 if not link.startswith('http'):
                     link = BASE + (link if link.startswith('/') else '/' + link)
                 
-                # 3. LABEL (bp_marque)
+                # 3. LABEL
                 label_tag = item.select_one('div.bp_marque a')
                 label = label_tag.get_text(strip=True) if label_tag else ""
                 
@@ -69,7 +80,7 @@ def generate_feed():
                 prix_tag = item.select_one('div.bp_prix')
                 prix = prix_tag.get_text(strip=True) if prix_tag else ""
                 
-                # 5. IMAGE (data-lazy prioritaire sur src)
+                # 5. IMAGE (data-lazy prioritaire)
                 img_tag = item.select_one('img')
                 img_url = None
                 if img_tag:
@@ -77,21 +88,21 @@ def generate_feed():
                     if img_url and not img_url.startswith('http'):
                         img_url = BASE + (img_url if img_url.startswith('/') else '/' + img_url)
                 
-                # 6. PISTES MP3 (tracklist)
+                # 6. PISTES MP3
                 pistes = []
                 for piste in item.select('li.mp3_tracks a.piste-mp3'):
                     piste_nom = piste.get_text(strip=True)
                     if piste_nom:
                         pistes.append(piste_nom)
                 
-                # Construction de la description
+                # Description courte
                 description_parts = []
                 if label:
                     description_parts.append(f"Label: {label}")
                 if prix:
                     description_parts.append(f"Prix: {prix}")
                 
-                description = " | ".join(description_parts)
+                description = " | ".join(description_parts) if description_parts else title
                 
                 # Création de l'entry
                 fe = fg.add_entry()
@@ -100,7 +111,7 @@ def generate_feed():
                 fe.link(href=link)
                 fe.description(description)
                 
-                # Contenu enrichi pour Feedly
+                # Contenu enrichi pour Feedly (avec content:encoded)
                 full_content = "<div>"
                 
                 if img_url:
@@ -135,6 +146,8 @@ def generate_feed():
         
     except Exception as e:
         print(f"❌ Erreur fatale : {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     generate_feed()
