@@ -7,13 +7,13 @@
     <docs>http://www.rssboard.org/rss-specification</docs>
     <generator>python-feedgen</generator>
     <language>fr</language>
-    <lastBuildDate>Wed, 01 Jul 2026 22:30:32 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 01 Jul 2026 23:30:49 +0000</lastBuildDate>
     <item>
       <title>⚠️ Aucun article détecté</title>
       <link>https://www.syncrophone.fr/news/</link>
       <description>Le script a récupéré 2226 caractères mais aucun div.product_box trouvé.</description>
       <guid isPermaLink="false">https://www.syncrophone.fr/news/#erreur</guid>
-      <pubDate>Wed, 01 Jul 2026 22:30:32 +0000</pubDate>
+      <pubDate>Wed, 01 Jul 2026 23:30:49 +0000</pubDate>
     </item>
   </channel>
 </rss>
