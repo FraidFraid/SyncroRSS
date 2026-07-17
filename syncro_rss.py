@@ -8,6 +8,10 @@ import time
 URL = "https://www.syncrophone.fr/news/"
 BASE = "https://www.syncrophone.fr"
 
+
+class NoArticlesFoundError(RuntimeError):
+    """Raised when the upstream page cannot be parsed safely."""
+
 def get_product_details(product_url):
     """Récupère la description et le style depuis la page produit"""
     try:
@@ -76,12 +80,10 @@ def generate_feed():
         print(f"Trouvé : {len(items)} articles")
         
         if len(items) == 0:
-            fe = fg.add_entry()
-            fe.id(URL + '#erreur')
-            fe.title("⚠️ Aucun article détecté")
-            fe.link(href=URL)
-            fe.description(f"Le script a récupéré {len(res.text)} caractères mais aucun div.product_box trouvé.")
-            fe.pubDate(datetime.now().astimezone())
+            raise NoArticlesFoundError(
+                f"La page contient {len(res.content)} octets mais aucun "
+                "div.product_box; le flux existant est conservé."
+            )
             
         for idx, item in enumerate(items, 1):
             try:
@@ -208,6 +210,7 @@ def generate_feed():
         print(f"❌ Erreur fatale : {e}")
         import traceback
         traceback.print_exc()
+        raise
 
 if __name__ == "__main__":
     generate_feed()
