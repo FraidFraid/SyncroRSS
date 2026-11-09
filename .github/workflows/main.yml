@@ -8,43 +8,76 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: update-rss
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: SyncroRSS/package-lock.json
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: pip install requests beautifulsoup4 feedgen
 
+      - name: Run tests
+        run: python -m unittest -v test_syncro_rss
+
+      # Si syncrophone.fr ne répond pas, le script sort proprement avec skip=true :
+      # le flux déjà publié sur gh-pages reste en place et le job ne passe pas en échec.
       - name: Generate RSS
+        id: rss
         run: python syncro_rss.py
 
       - name: Install app dependencies
+        if: steps.rss.outputs.skip != 'true'
         working-directory: SyncroRSS
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Build dashboard app
+        if: steps.rss.outputs.skip != 'true'
         working-directory: SyncroRSS
         run: npm run build
 
       - name: Add RSS to app output
+        if: steps.rss.outputs.skip != 'true'
         run: |
           cp rss.xml SyncroRSS/dist/rss.xml
 
       - name: Deploy to gh-pages
+        id: deploy
+        if: steps.rss.outputs.skip != 'true'
+        continue-on-error: true
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./SyncroRSS/dist
+          keep_files: true
+          enable_jekyll: false
+
+      # Deuxième essai si GitHub a renvoyé une erreur serveur au premier push.
+      - name: Retry deploy to gh-pages
+        if: steps.rss.outputs.skip != 'true' && steps.deploy.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy to gh-pages (2nd attempt)
+        if: steps.rss.outputs.skip != 'true' && steps.deploy.outcome == 'failure'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

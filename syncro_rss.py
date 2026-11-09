@@ -2,6 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 from feedgen.feed import FeedGenerator
 from datetime import datetime
+import os
+import sys
 import time
 
 # --- CONFIGURATION POUR SYNCROPHONE ---
@@ -9,8 +11,27 @@ URL = "https://www.syncrophone.fr/news/"
 BASE = "https://www.syncrophone.fr"
 
 
+FETCH_ATTEMPTS = 3
+FETCH_TIMEOUT = 30
+RETRY_DELAY = 10
+
+
 class NoArticlesFoundError(RuntimeError):
     """Raised when the upstream page cannot be parsed safely."""
+
+
+def fetch_with_retry(url, headers, attempts=FETCH_ATTEMPTS, timeout=FETCH_TIMEOUT, delay=RETRY_DELAY):
+    """GET avec plusieurs tentatives : le site répond parfois trop lentement."""
+    for attempt in range(1, attempts + 1):
+        try:
+            res = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+            res.raise_for_status()
+            return res
+        except requests.RequestException as e:
+            if attempt == attempts:
+                raise
+            print(f"  ⚠️ Tentative {attempt}/{attempts} échouée ({e}), nouvel essai dans {delay * attempt} s")
+            time.sleep(delay * attempt)
 
 def get_product_details(product_url):
     """Récupère la description et le style depuis la page produit"""
@@ -65,8 +86,7 @@ def generate_feed():
     }
     
     try:
-        res = requests.get(URL, headers=headers, timeout=20, allow_redirects=True)
-        res.raise_for_status()
+        res = fetch_with_retry(URL, headers)
         soup = BeautifulSoup(res.text, 'html.parser')
         
         fg = FeedGenerator()
@@ -212,5 +232,24 @@ def generate_feed():
         traceback.print_exc()
         raise
 
+def set_github_output(name, value):
+    output = os.environ.get("GITHUB_OUTPUT")
+    if output:
+        with open(output, "a") as f:
+            f.write(f"{name}={value}\n")
+
+
+def main():
+    """Site indisponible ou page vide : on garde le flux déjà publié sans faire échouer le job."""
+    try:
+        generate_feed()
+    except (requests.RequestException, NoArticlesFoundError) as e:
+        print(f"::warning::Syncrophone indisponible, flux existant conservé : {e}")
+        set_github_output("skip", "true")
+        return 0
+    set_github_output("skip", "false")
+    return 0
+
+
 if __name__ == "__main__":
-    generate_feed()
+    sys.exit(main())

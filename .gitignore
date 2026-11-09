@@ -2,3 +2,5 @@
 node_modules/
 SyncroRSS/node_modules/
 SyncroRSS/dist/
+__pycache__/
+rss.xml
