@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import tempfile
 import unittest
@@ -49,7 +51,9 @@ class RetryAndSkipTests(unittest.TestCase):
         mock_get.side_effect = requests.exceptions.ReadTimeout("lent")
         with tempfile.TemporaryDirectory() as directory:
             output = os.path.join(directory, "out")
-            with patch.dict(os.environ, {"GITHUB_OUTPUT": output}):
+            # stdout capturé : sinon GitHub affiche le ::warning:: du test comme une vraie alerte
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": output}), \
+                    contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(syncro_rss.main(), 0)
             with open(output) as f:
                 self.assertIn("skip=true", f.read())
