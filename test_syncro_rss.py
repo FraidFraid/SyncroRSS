@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+import requests
+
 import syncro_rss
 
 
@@ -29,6 +31,29 @@ class GenerateFeedTests(unittest.TestCase):
                     self.assertEqual(feed.read(), b"existing valid feed")
             finally:
                 os.chdir(previous_directory)
+
+
+class RetryAndSkipTests(unittest.TestCase):
+    @patch("syncro_rss.time.sleep")
+    @patch("syncro_rss.requests.get")
+    def test_fetch_retries_after_timeout(self, mock_get, _sleep):
+        ok = Mock()
+        ok.raise_for_status.return_value = None
+        mock_get.side_effect = [requests.exceptions.ReadTimeout("lent"), ok]
+        self.assertIs(syncro_rss.fetch_with_retry("https://x", {}), ok)
+        self.assertEqual(mock_get.call_count, 2)
+
+    @patch("syncro_rss.time.sleep")
+    @patch("syncro_rss.requests.get")
+    def test_main_skips_without_failing_when_site_is_down(self, mock_get, _sleep):
+        mock_get.side_effect = requests.exceptions.ReadTimeout("lent")
+        with tempfile.TemporaryDirectory() as directory:
+            output = os.path.join(directory, "out")
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": output}):
+                self.assertEqual(syncro_rss.main(), 0)
+            with open(output) as f:
+                self.assertIn("skip=true", f.read())
+        self.assertEqual(mock_get.call_count, syncro_rss.FETCH_ATTEMPTS)
 
 
 if __name__ == "__main__":
